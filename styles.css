@@ -1,0 +1,16 @@
+body {
+  margin: 0;
+  overflow: hidden;
+  background-color: black;
+}
+
+h1 {
+  color: white;
+  font-size: 72px;
+  position: absolute;
+  left: 50px;
+}
+
+canvas {
+  display: block;
+}/*# sourceMappingURL=styles.css.map */
