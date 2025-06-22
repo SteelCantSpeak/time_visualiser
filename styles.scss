@@ -1,6 +1,6 @@
-body { 
+body {
     margin: 0;
-    overflow: hidden; 
+    overflow: hidden;
     background-color: black;
 }
 
@@ -10,6 +10,33 @@ h1 {
     position: absolute;
     left: 50px;
 }
+
 canvas {
     display: block;
+}
+
+.foreground {
+    position: absolute;
+    z-index: 1000;
+}
+
+#popup {
+    display: none;
+    padding: 10px;
+    background-color: rgba(30, 30, 30, 0.95);
+    color: #fff;
+    border-radius: 5px;
+    font-size: 14px;
+    pointer-events: auto;
+}
+
+#clock {
+    top: 10px;
+    right: 10px;
+    padding: 8px 12px;
+    background-color: rgba(30, 30, 30, 0.9);
+    color: #fff;
+    font-size: 14px;
+    font-family: Arial, sans-serif;
+    border-radius: 4px;
 }

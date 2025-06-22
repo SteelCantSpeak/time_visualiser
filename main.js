@@ -1,109 +1,164 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import * as helper from './helpers.js';
 
-import * as tz from 'tz';
+const SPHERE_RADIUS = 1;
 
-// 1. Setup scene, camera, and renderer
 const renderer = new THREE.WebGPURenderer();
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
+scene.background = new THREE.Color( 0x010103 );
 
-
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+const camera = new THREE.PerspectiveCamera(
+    75,
+    window.innerWidth / window.innerHeight,
+    0.1,
+    1000
+);
 const controls = new OrbitControls(camera, renderer.domElement);
 camera.position.set(0, 0, 2);
-camera.layers.enable(1);
 controls.target.set(0, 0, 0);
-controls.update();      
-
-// Render loop
-function animate() {
-    requestAnimationFrame(animate);
-    globe.rotation.y += 0.001;
-    controls.update();
-    renderer.renderAsync(scene, camera);
-}
-
-//End Setup
+controls.update();
 
 const textureLoader = new THREE.TextureLoader();
-const dayTexture = textureLoader.load( 'static/earth_day_4096.jpg' );
-				dayTexture.colorSpace = THREE.SRGBColorSpace;
-				dayTexture.anisotropy = 8;
+const dayTexture = textureLoader.load('static/atlas1.jpg');
+dayTexture.colorSpace = THREE.SRGBColorSpace;
+dayTexture.anisotropy = 8;
 
-function createMesh(geometry, material, x, y, z, name, layer) {
-    const mesh = new THREE.Mesh(geometry, material.clone());
-    mesh.position.set(x, y, z);
+function createMesh(geometry, material, position, name, layer) {
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.copy(position);
     mesh.name = name;
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     mesh.layers.set(layer);
     return mesh;
-  }
+}
 
-let globe = createMesh(
-    new THREE.SphereGeometry(1, 32, 32),
-    new THREE.MeshBasicMaterial({ map:dayTexture }), 
-    0, 0, 0,
+// Create the Globe
+const globe = createMesh(
+    new THREE.SphereGeometry(SPHERE_RADIUS, 64, 64),
+    new THREE.MeshStandardMaterial({ map: dayTexture }),
+    new THREE.Vector3(0, 0, 0),
     'Earth',
     0
 );
+
+const ambientLight = new THREE.AmbientLight(0xffffff, 2);
+scene.add(ambientLight);
 scene.add(globe);
 
-//End Scene
+let spin = true;
 
-window.addEventListener( 'resize', onWindowResize );
+function animate() {
+    requestAnimationFrame(animate);
+    if (spin) globe.rotation.y += 0.0005;
+    controls.update();
+    renderer.renderAsync(scene, camera);
+}
+animate();
+
+
+
+//helper.AusCap.forEach(([lat, lon, color]) => helper.createMarker(globe, lat, lon, color));
+//helper.usCap.forEach(([lat, lon, color]) => helper.createMarker(globe, lat, lon, color));
+
+
+window.addEventListener('resize', onWindowResize);
 
 function onWindowResize() {
-
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
-
-    renderer.setSize( window.innerWidth, window.innerHeight );
-
+    renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
 const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
 
-document.addEventListener('mousedown', onMouseDown);
+document.addEventListener('mousedown', async (event) => {
+    hidePopup();
 
-function onMouseDown(event) {
-  const coords = new THREE.Vector2(
-    (event.clientX / renderer.domElement.clientWidth) * 2 - 1,
-    -((event.clientY / renderer.domElement.clientHeight) * 2 - 1),
-  );
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = - (event.clientY / window.innerHeight) * 2 + 1;
 
-  raycaster.setFromCamera(coords, camera);
+    raycaster.setFromCamera(mouse, camera);
+    const intersects = raycaster.intersectObject(globe);
 
-  const intersections = raycaster.intersectObjects(scene.children, true);
-  if (intersections.length > 0) {    
-    // Convert the intersection point from Cartesian to spherical coordinates
-    const latLon = cartesianToLatLon(intersections[0].point);
-    console.log('Latitude:', latLon.latitude, 'Longitude:', latLon.longitude);
-    
-    //get TZ from https://www.geoapify.com/get-timezone-from-lat-long-geographical-coordinates/
-    var requestOptions = {
-        method: 'GET',
-        };
-        fetch(`https://api.geoapify.com/v1/geocode/reverse?lat=${latLon.latitude}&lon=${latLon.longitude}&apiKey=c73c6e8231eb430ab8f2cb52b14ec1da`, requestOptions)
-        .then(response => response.json())
-        .then(result => console.log(result.features[0].properties.timezone))
-        .catch(error => console.log('error', error));
+    if (!intersects.length) return;
+
+    const point = intersects[0].point;
+    const [lat, lon] = helper.getLatLon(globe, point);
+    const text = `Latitude: ${lat.toFixed(6)}<br>Longitude: ${lon.toFixed(6)}`;
+
+    showPopup(event.clientX, event.clientY, text);
+    const tzData = await helper.fetchTimeZone(lat, lon);
+    if (tzData) {
+        const formattedTime = new Date().toLocaleString('en-US', {
+            timeZone: tzData.name,
+        day: 'numeric',
+        month: 'numeric',
+        hour: 'numeric',
+        minute: 'numeric',
+        hour12: true
+        });
+        showPopup(event.clientX, event.clientY, `${text}<br>Name: ${tzData.name}<br>Time: ${formattedTime}`);
     }
+});
+
+
+
+
+const popup = document.getElementById('popup');
+
+function showPopup(x, y, content) {
+    popup.innerHTML = content;
+    popup.style.display = 'block';
+
+    const popupRect = popup.getBoundingClientRect();
+    const margin = 10; // margin from window edges
+
+    // Default positions
+    let left = x;
+    let top = y;
+
+    // Check right overflow
+    if (x + popupRect.width + margin > window.innerWidth) {
+        left = window.innerWidth - popupRect.width - margin;
+    }
+    // Check bottom overflow
+    if (y + popupRect.height + margin > window.innerHeight) {
+        top = window.innerHeight - popupRect.height - margin;
+    }
+
+    // Prevent negative positioning
+    if (left < margin) left = margin;
+    if (top < margin) top = margin;
+
+    popup.style.left = `${left}px`;
+    popup.style.top = `${top}px`;
+
+    spin = false;
 }
 
-// Function to convert Cartesian coordinates to Latitude/Longitude
-function cartesianToLatLon(point) {
-    const radius = 1;  // Radius of the sphere
-    const longitude = Math.atan2(point.z, point.x);  // Longitude: atan2(z, x)
-    const latitude = Math.asin(point.y / radius);    // Latitude: asin(y / radius)
-    // Convert radians to degrees
-    return {
-        latitude: latitude * (180 / Math.PI),
-        longitude: longitude * (180 / Math.PI)
-    };
+
+function hidePopup() {
+    popup.style.display = 'none';
+    spin = true;
 }
 
-animate();
+
+const clock = document.getElementById('clock');
+
+function updateClock() {
+    clock.textContent = new Date().toLocaleString('en-US', {
+        day: 'numeric',
+        month: 'numeric',
+        hour: 'numeric',
+        minute: 'numeric',
+        hour12: true
+        });
+}
+updateClock();
+setInterval(updateClock, 1000);
