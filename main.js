@@ -93,6 +93,7 @@ document.addEventListener('mousedown', async (event) => {
     const text = `Latitude: ${lat.toFixed(6)}<br>Longitude: ${lon.toFixed(6)}`;
 
     showPopup(event.clientX, event.clientY, text);
+    let marker = helper.createMarker(globe, lat, lon, 0xff00ff);
     const tzData = await helper.fetchTimeZone(lat, lon);
     if (tzData) {
         const formattedTime = new Date().toLocaleString('en-US', {
@@ -144,6 +145,7 @@ function showPopup(x, y, content) {
 
 
 function hidePopup() {
+    helper.removeMarkers(globe);
     popup.style.display = 'none';
     spin = true;
 }

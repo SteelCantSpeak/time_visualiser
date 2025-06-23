@@ -95,7 +95,18 @@ function latLonToCartesian(latitude, longitude, radius) {
 function createMarker(globe, latitude, longitude, color) {
     const marker = new THREE.Mesh(new THREE.SphereGeometry(0.01, 16, 16), new THREE.MeshBasicMaterial({ color }));
     marker.position.copy(latLonToCartesian(latitude, longitude, 1.01));
+    marker.name = 'marker';
     globe.add(marker);
 }
 
-export {AusCap, usCap, getLatLon, fetchTimeZone, latLonToCartesian, createMarker}
+function removeMarkers(globe){
+    globe.children.forEach((child) => {
+  if (child.name === 'marker') {
+    globe.remove(child);
+    child.geometry.dispose();
+    child.material.dispose();
+  }
+});
+}
+
+export {AusCap, usCap, getLatLon, fetchTimeZone, latLonToCartesian, createMarker, removeMarkers}
